@@ -3,7 +3,7 @@ import requests
 from datetime import datetime
 
 session = requests.session()
-titles = get_articles(100000, verbose=True)
+titles = get_articles(100000)
 titles.to_csv('titles.csv')
 
 n = 500
