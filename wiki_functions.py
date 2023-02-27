@@ -1,15 +1,20 @@
 import requests
 import json
 import pandas as pd
+from typing import Optional
 
 
-def get_articles(n, lang='en', verbose=False):
+def get_articles(n: int, lang: str = 'en') -> pd.DataFrame:
+    """
+    Retrieve sample of n article titles from Wikipedia, using API
+    :param n: number of articles
+    :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
+    :return: DataFrame with columns "title" and "id" (it's internal wikipedia id of article)
+    """
     session = requests.session()
     api_address = f'https://{lang}.wikipedia.org/w/api.php?action=query&list=random&format=json&rnnamespace=0&rnlimit='
     articles = pd.DataFrame(columns=['id', 'title'])
     while len(articles) < n:
-        if verbose:
-            print(len(articles))
         response = session.get(api_address+str(min(500, n - len(articles))))
         batch = json.loads(response.content)['query']['random']
         articles = pd.concat(
@@ -17,7 +22,14 @@ def get_articles(n, lang='en', verbose=False):
     return articles
 
 
-def get_category(title, lang='en', session=None):
+def get_category(title: str, lang: str = 'en', session: Optional[requests.Session] = None) -> list[str]:
+    """
+    Retrieve categories of article by its caption using API. Only unhidden categories.
+    :param title: title of article, as it shown on page
+    :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
+    :param session: use requests.Session() for massive retrieving
+    :return: list of categories (without "Category:" prefix)
+    """
     url = f"https://{lang}.wikipedia.org/w/api.php"
     params = {
         "action": "query",
