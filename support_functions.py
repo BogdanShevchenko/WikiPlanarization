@@ -64,6 +64,8 @@ def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool 
             df[id_col] = df[id_col].apply(ast.literal_eval)
         except ValueError:
             pass
+    else:
+        df[id_col] = df[id_col].astype(int)
     agg_func = {id_col: 'sum'} if lists else {id_col: pd.Series.tolist}
     df = df.explode(cat_col).groupby(cat_col).agg(agg_func).reset_index()
     df[id_col] = df[id_col].apply(set).apply(list)
@@ -79,11 +81,12 @@ def data_path(stage: Sequence[str], project: str, data_folder_name: str = 'data'
         return f'{data_folder_name}/{project}/{stage[0]}_with_{stage[1]}.csv'
 
 
-def generate_stages(n: int) -> list[tuple[str, ...], ...]:
+def generate_stages(n: int, final_file: str = 'final') -> list[tuple[str, ...], ...]:
     """
     Generate list of stages of calculations. First two stages are always ('title', ) and ('title', 'category') and last
-    always will be ('final')
+    always will be (<final_file>, )
     :param n: number of infracategories (0 means that there will be only categories). Total amount of stage is n + 3
+    :param final_file: name of last stage (and resulting file)
     :return: list of stage tuples
     """
     base = ('title', 'category', 'infra')
@@ -92,7 +95,7 @@ def generate_stages(n: int) -> list[tuple[str, ...], ...]:
         s = s + [(base[1], base[2] + '1')]
     elif n > 1:
         s = s + [(base[1], base[2] + '1')] + [(f'{base[2]}{i - 1}', f'{base[2]}{i}') for i in range(2, n + 1)]
-    return s + [('final', )]
+    return s + [(final_file, )]
 
 
 def convert_lists(df: pd.DataFrame, col: str) -> pd.DataFrame:

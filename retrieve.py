@@ -8,21 +8,24 @@ import pandas as pd
 
 from support_functions import generate_stages, data_path, convert_lists, apply_with_interim_saving, regroup_categories
 
-def get_articles(n: int, lang: str = 'en') -> pd.DataFrame:
+
+def get_articles(n: int, lang: str = 'en', id_: bool = False) -> pd.DataFrame:
     """
     Retrieve sample of n article titles from Wikipedia, using API
     :param n: number of articles
     :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
-    :return: DataFrame with columns "title" and "id" (it's internal wikipedia id of article)
+    :param id_: add column with internal wikipedia id
+    :return: DataFrame with columns "title" and "id" (if id_ is True)
     """
     session = requests.session()
     api_address = f'https://{lang}.wikipedia.org/w/api.php?action=query&list=random&format=json&rnnamespace=0&rnlimit='
-    articles = pd.DataFrame(columns=['id', 'title'])
+    cols = ['id', 'title'] if id_ else ['title']
+    articles = pd.DataFrame(columns=cols)
     while len(articles) < n:
         response = session.get(api_address+str(min(500, n - len(articles))))  # maximum 500 article per request
         batch = json.loads(response.content)['query']['random']
         articles = pd.concat(
-            [articles, pd.DataFrame(batch).drop('ns', axis=1)]).drop_duplicates().reset_index(drop=True)
+            [articles, pd.DataFrame(batch)[cols]]).drop_duplicates().reset_index(drop=True)
     return articles
 
 
@@ -57,8 +60,26 @@ def get_category(title: str, lang: str = 'en', session: Optional[requests.Sessio
     return categories
 
 
-def get_articles_with_infracategories(articles_num, number_of_infracategories, project, data_folder_name='data'):
-    stages = generate_stages(number_of_infracategories)
+def get_articles_with_infracategories(articles_num, number_of_infracategories, project,
+                                      data_folder_name='data', final_stage='final'):
+    """
+    Get articles title, categories for each title, categories of their categories (infracategories) and so on.
+    Data will be saved in folder <data_folder_name>/<project> in multiple csv files with next structure
+    one file will be "title"|"list of categories of article"
+    and other
+    "category"|"list of article ids in this category"|"categories which this category belongs"
+    and also there will be one file named "final.csv", where all data will be grouped
+    structure of fi
+    ids are number of row in first file
+    :param articles_num: how many articles do you want to have
+    :param number_of_infracategories: 0 means that there will be only categories,
+    1 for categories and categories of categories etc.
+    :param project: name of subfolder in data folder, where all files will be saved
+    :param data_folder_name: name of data folder (just "data" by default)
+    :param final_stage: name of final stage and it (plus .csv) will be the name of resulting file
+    :return: None
+    """
+    stages = generate_stages(number_of_infracategories, final_stage)
     if not exists(data_folder_name):
         os.mkdir(data_folder_name)
     if not exists(f'{data_folder_name}/{project}'):
@@ -77,8 +98,11 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                 except NameError:
                     df = pd.read_csv(data_path(prev_stage, project), dtype=str)
                     print(f'Starting stage {stage_num}. Process {len(df)} rows({stage[0]})...')
+                df = df.reset_index()
+                df = df[['title', 'index']]
                 df = apply_with_interim_saving(df, f=get_category, col_to_apply=stage[0], new_col=stage[1],
                                                csv_name=data_path(stage, project), session=requests.session())
+
             else:
                 try:
                     print(f'Starting stage {stage_num}. Process {len(df)} rows({stage[0]})...')
@@ -91,12 +115,18 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                         csv_name=data_path(prev_stage, project), session=requests.session()
                     )
                     print(f'Starting stage {stage_num}. Process {len(df)} rows({stage[0]})...')
-                if stage_num == 2:
-                    df = regroup_categories(df.reset_index(), cat_col=prev_stage[1], id_col='index', lists=False)
-                else:
-                    df = regroup_categories(df, cat_col=prev_stage[1], id_col='index', lists=True)
+                df = regroup_categories(df, cat_col=prev_stage[1], id_col='index', lists=stage_num != 2)
                 if stage_num == len(stages) - 1:
-                    df.to_csv(path, index=False)
+                    res = []
+                    for stage_ in stages[1:-1]:
+                        df_ = pd.read_csv(data_path(stage_, project), dtype=str)
+                        df_ = convert_lists(df_, stage_[1])
+                        df_ = regroup_categories(df_.reset_index(), cat_col=stage_[1], id_col='index',
+                                                 lists=stage_ != stages[1])
+                        df_.columns = ['obj', 'ids']
+                        df_['obj_name'] = stage_[1]
+                        res.append(df_)
+                    pd.concat(res).to_csv(path, index=False)
                     print('Final stage complete')
                     break
                 df = apply_with_interim_saving(df, f=get_category, col_to_apply=stage[0], new_col=stage[1],
