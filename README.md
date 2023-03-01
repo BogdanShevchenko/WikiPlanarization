@@ -1,6 +1,6 @@
 Project to make a "map" of Wikipedia, based on categories of sample of articles
 
-For collecting data use:
+To make dataset use:
 ```python
 from retrieve import get_articles_with_infracategories
 data_folder_name = 'data'
