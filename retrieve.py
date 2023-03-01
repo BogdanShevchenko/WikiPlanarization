@@ -139,5 +139,6 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
             elif stage_num == len(stages) - 1:
                 print('Final stage complete')
             else:
-                print(f'Stage {stage_num} (get {stage[1]} for {stage[0]}) already start processed, check file completeness')
+                print(f'Stage {stage_num} (get {stage[1]} for {stage[0]}) already start processed,',
+                      f'check file completeness')
         prev_stage = stage
