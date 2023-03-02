@@ -46,7 +46,8 @@ def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, 
     return df
 
 
-def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool = True) -> pd.DataFrame:
+def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool = True,
+                       transform_prohibited: bool = False) -> pd.DataFrame:
     """
     Transform DataFrame from result of previous stage to ready for next stage (explode and rearranging lists of
     ids of the articles, belongs to each category).
@@ -57,15 +58,18 @@ def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool 
     :param cat_col: name of column in df, where lists of categories are staged
     :param id_col: name of column in df, where lists of ids of articles are staged
     :param lists: True if ids are in lists and False if they are integers (at first stage)
+    :param transform_prohibited: True if you don't want to try any id_col transformation (i.e. if you have titles
+    instead of ids)
     :return: Transformed DataFrame
     """
-    if lists:
-        try:
-            df[id_col] = df[id_col].apply(ast.literal_eval)
-        except ValueError:
-            pass
-    else:
-        df[id_col] = df[id_col].astype(int)
+    if not transform_prohibited:
+        if lists:
+            try:
+                df[id_col] = df[id_col].apply(ast.literal_eval)
+            except ValueError:
+                pass
+        else:
+            df[id_col] = df[id_col].astype(int)
     agg_func = {id_col: 'sum'} if lists else {id_col: pd.Series.tolist}
     df = df.explode(cat_col).groupby(cat_col).agg(agg_func).reset_index()
     df[id_col] = df[id_col].apply(set).apply(list)
