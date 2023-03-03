@@ -1,9 +1,12 @@
-from scipy.sparse import dok_matrix
+from scipy.sparse import dok_matrix, lil_matrix
 import pandas as pd
 from itertools import permutations
 
+from support_functions import timing
 
-def make_sparce_category_matrix(df: pd.DataFrame, n, ids_col='index', max_val=None):
+
+@timing(printed_args=['n'])
+def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index', max_val: int = None) -> lil_matrix:
     """
     Convert DataFrame with categories and ids to scipy sparce matrix.
     :param df: DataFrame with column with categories (or infracategories) and column with list of ids, which belong to
