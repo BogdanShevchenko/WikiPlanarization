@@ -39,3 +39,25 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
     category_matrix = (category_matrix + category_matrix.T).tolil()
     category_matrix.setdiag(0)
     return category_matrix
+
+
+def filter_categories(df, cat_col='category'):
+    exclude = ['[Dd]isambiguation',
+               ' stubs$',
+               ':Living people',
+               '[0-9]+s? (?:births$|deaths)',
+               'Category:Deaths (?:by|due|from)',
+               '(?:Alcohol-related|Accidental|Road incident|Tuberculosis|Sports?) deaths',
+               '(?:century|animal|racehorse|BC) (?:births|deaths)',
+               ':Alumni',
+               'alumni$',
+               'People educated at',
+               'Category:People from',
+               "people of .+ descent",
+               ':[0-9]+(?:th|st)-century.+(?:women|people)$',
+               ':Burials at',
+               ':[0-9]+ (?:dis)?establishments in',
+               'century (?:dis)?establishments', ]
+    for token in exclude:
+        df = df[~df[cat_col].str.contains(token)]
+    return df
