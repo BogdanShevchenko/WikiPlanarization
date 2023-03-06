@@ -13,7 +13,7 @@ get_articles_with_infracategories(articles_num, number_of_infracategories,
 ```
 
 Wikipedia API is not very fast (and they could block you, if you will use treads 
-and make too many requests per second), it takes near 3 minutes for 1000 requests. So, if you
+and make too many requests per second), it takes near 10 seconds for 1000 requests. So, if you
 want to have big dataset and a lot of infracategories, it will take many hours to get 
 all data.
 
