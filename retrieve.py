@@ -9,7 +9,7 @@ import pandas as pd
 from support_functions import generate_stages, data_path, convert_lists, apply_with_interim_saving, regroup_categories
 
 
-def get_articles(n: int, lang: str = 'en', id_: bool = False) -> pd.DataFrame:
+def get_random_articles_titles(n: int, lang: str = 'en', id_: bool = False) -> pd.DataFrame:
     """
     Retrieve sample of n article titles from Wikipedia, using API
     :param n: number of articles
@@ -43,7 +43,8 @@ def get_category(title: str, lang: str = 'en', session: Optional[requests.Sessio
         "format": "json",
         "prop": "categories",
         "titles": title,
-        "clshow": "!hidden"
+        "clshow": "!hidden",
+        "cllimit": 20
     }
     if session is None:
         session = requests.session()
@@ -57,6 +58,54 @@ def get_category(title: str, lang: str = 'en', session: Optional[requests.Sessio
         categories = []
     if items_len != 1:  # Never get this error but who knows
         print(f'Unknown problem with API response, for article {title} {items_len} elements was returned!!')
+    return categories
+
+
+def get_category_mass(titles: list[str], lang: str = 'en', session: Optional[requests.Session] = None,
+                      n: int = 50, clcontinue: Optional[str] = None) -> dict[str, list[str]]:
+    """
+    Retrieve categories of article by its caption using API. Only unhidden categories.
+    :param titles: list of titles of article, as it shown on page
+    :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
+    :param session: use requests.Session() for massive retrieving
+    :param n: number of categories, retrieved per API query. For usual users 50 is maximum.
+    :param clcontinue: if amount of categories is too big for one query, you should continue retrieving from this point
+    :return: list of categories (without "Category:" prefix)
+    """
+    url = f"https://{lang}.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "prop": "categories",
+        "titles": "|".join([title.replace(' ', '_') for title in titles]),
+        "clshow": "!hidden",
+        "cllimit": 500
+    }
+    if clcontinue:
+        params['clcontinue'] = clcontinue
+    if session is None:
+        session = requests.session()
+
+    if len(titles) > n:
+        res = {}
+        [res.update(d) for d in [get_category_mass(titles[t: t + n], lang, session, n)
+                                 for t in range(0, len(titles), n)]]
+        return res
+
+    data = session.get(url=url, params=params).json()
+    if 'continue' in data:
+        clcontinue = data['continue']['clcontinue']
+        second_batch = get_category_mass(titles, lang, session, n, clcontinue=clcontinue)
+    else:
+        second_batch = {}
+    data = data["query"]["pages"]
+    try:
+        categories = {art['title']: [cat['title'].replace('Category:', '') for cat in art['categories']]
+                      for art in data.values() if 'categories' in art}
+    except KeyError:
+        print(titles, 'no categories')
+        categories = {}
+    categories.update(second_batch)
     return categories
 
 
@@ -90,7 +139,7 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
         if not exists(path):
             if stage_num == 0:
                 print('Starting stage 0...')
-                df = get_articles(articles_num)
+                df = get_random_articles_titles(articles_num)
                 df.to_csv(path, index=False)
             elif stage_num == 1:
                 try:
@@ -100,8 +149,9 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                     print(f'Starting stage {stage_num}. Process {len(df)} rows({stage[0]})...')
                 df = df.reset_index()
                 df = df[['title', 'index']]
-                df = apply_with_interim_saving(df, f=get_category, col_to_apply=stage[0], new_col=stage[1],
-                                               csv_name=data_path(stage, project), session=requests.session())
+                df = apply_with_interim_saving(df, f=get_category_mass, col_to_apply=stage[0], new_col=stage[1],
+                                               csv_name=data_path(stage, project), session=requests.session(),
+                                               one_by_one=False)
 
             else:
                 try:
@@ -111,8 +161,8 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                     df = pd.read_csv(data_path(prev_stage, project), dtype=str)
                     df = convert_lists(df, prev_stage[1])
                     df = apply_with_interim_saving(
-                        df, f=get_category, col_to_apply=prev_stage[0], new_col=prev_stage[1],
-                        csv_name=data_path(prev_stage, project), session=requests.session()
+                        df, f=get_category_mass, col_to_apply=prev_stage[0], new_col=prev_stage[1],
+                        csv_name=data_path(prev_stage, project), session=requests.session(), one_by_one=False
                     )
                     print(f'Starting stage {stage_num}. Process {len(df)} rows({stage[0]})...')
                 df = regroup_categories(df, cat_col=prev_stage[1], id_col='index', lists=stage_num != 2)
@@ -129,8 +179,9 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                     pd.concat(res).to_csv(path, index=False)
                     print('Final stage complete')
                     break
-                df = apply_with_interim_saving(df, f=get_category, col_to_apply=stage[0], new_col=stage[1],
-                                               csv_name=data_path(stage, project), session=requests.session())
+                df = apply_with_interim_saving(df, f=get_category_mass, col_to_apply=stage[0], new_col=stage[1],
+                                               csv_name=data_path(stage, project), session=requests.session(),
+                                               one_by_one=False)
         else:
             if stage_num > 1:
                 print('Stage complete')
@@ -142,3 +193,20 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
                 print(f'Stage {stage_num} (get {stage[1]} for {stage[0]}) already start processed,',
                       f'check file completeness')
         prev_stage = stage
+
+
+def get_article_text(title, lang='en', session=None):
+    if session is None:
+        session = requests.session()
+    url = f"https://{lang}.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "prop": "extracts",
+        "exsentences": 10,
+        "explaintext": True,
+        "titles": title
+    }
+    data = session.get(url=url, params=params).json()
+    return list(data['query']['pages'].values())[0]['extract']
+

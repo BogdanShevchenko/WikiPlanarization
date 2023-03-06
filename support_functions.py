@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 
 
 def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, new_col: str, csv_name: str,
-                              n: int = 1000, verbose: bool = True, **kwargs) -> pd.DataFrame:
+                              n: int = 1000, verbose: bool = True, one_by_one: bool = True, **kwargs) -> pd.DataFrame:
     """
     Retrieving categories is done one-by-one, and it could take a lot of time. If some connection errors or
     other problems take place, all data could be lost. To prevent this dataframes updating by chunks of 1000 rows,
@@ -19,6 +19,8 @@ def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, 
     :param csv_name: name of backup csv file where results will be saved
     :param n: size of chunk
     :param verbose: get some printed notifications about dataframe processing
+    :param one_by_one: if True, use function with apply, if False: give it list of arguments
+    and process dict of responses
     :param kwargs: arguments, which will be passed to the f function
     :return: DataFrame with new columns (and side effect: csv file with result is created)
     """
@@ -35,8 +37,12 @@ def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, 
         if df[df[new_col].isna()].index.min() > 0:
             print(f'Finish uncompleted calculations...({df.index.max() - df[df[new_col].isna()].index.min()} rows)')
         for pos in range(df[df[new_col].isna()].index.min(), df.index.max(), n):
-            df.loc[pos:pos + n, new_col] = df.loc[pos:pos + n, col_to_apply].apply(
-                lambda x: f(x, **kwargs))
+            if one_by_one:
+                df.loc[pos:pos + n, new_col] = df.loc[pos:pos + n, col_to_apply].apply(
+                    lambda x: f(x, **kwargs))
+            else:
+                args_list = df.loc[pos:pos + n, col_to_apply].tolist()
+                df.loc[pos:pos + n, new_col] = pd.Series(f(args_list, **kwargs)).reindex(args_list).tolist()
             df.to_csv(csv_name, index=False)
             if verbose:
                 print(pos, datetime.now())
@@ -174,5 +180,4 @@ def timing(printed_args=None):
                 return result
 
         return wrap
-
     return decorator
