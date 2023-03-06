@@ -110,7 +110,7 @@ def get_category_mass(titles: list[str], lang: str = 'en', session: Optional[req
 
 
 def get_articles_with_infracategories(articles_num, number_of_infracategories, project,
-                                      data_folder_name='data', final_stage='final'):
+                                      data_folder_name='data', final_stage='final') -> None:
     """
     Get articles title, categories for each title, categories of their categories (infracategories) and so on.
     Data will be saved in folder <data_folder_name>/<project> in multiple csv files with next structure
@@ -195,7 +195,14 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
         prev_stage = stage
 
 
-def get_article_text(title, lang='en', session=None):
+def get_article_text(title: str, lang: str = 'en', session: Optional[requests.Session] = None) -> str:
+    """
+    Retrieve first 10 sentences of article by its name
+    :param title: title of article as it is on web-page
+    :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
+    :param session: use requests.Session() for massive retrieving
+    :return: text of article (first 10 sentences)
+    """
     if session is None:
         session = requests.session()
     url = f"https://{lang}.wikipedia.org/w/api.php"
