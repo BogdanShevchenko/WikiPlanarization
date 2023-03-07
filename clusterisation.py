@@ -2,9 +2,11 @@ import scipy.sparse
 from scipy.sparse import dok_matrix, lil_matrix, spmatrix
 import pandas as pd
 from itertools import permutations
-from typing import Optional
+from typing import Optional, Callable, Union
 
 from support_functions import timing
+from sklearn.metrics import silhouette_score
+import numpy as np
 
 
 @timing(printed_args=['n'])
@@ -38,7 +40,25 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
     category_matrix._update(d)
     category_matrix = (category_matrix + category_matrix.T).tolil()
     category_matrix.setdiag(0)
+    print('Total links after clipping:', category_matrix.todense().sum())
     return category_matrix
+
+
+def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
+    """
+    Convert matrix of common categories to jakkard similarity matrix. Used weightened Jakkard as here
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.jaccard.html
+    Also, gor Jakkard generalization read
+    http://theory.stanford.edu/~sergei/papers/soda10-jaccard.pdf
+
+    :param matrix: affinity matrix (A(i,j) = # of similar categories
+    :param each_node_edges: number of categories for each of articles (weighted with same weights as matrix)
+
+    :return: matrix with same size as input matrix
+    """
+    pairwise_sums = np.add.outer(each_node_edges, each_node_edges)
+    matrix = matrix / (pairwise_sums - matrix)
+    return matrix
 
 
 def filter_categories(df, cat_col='category'):
