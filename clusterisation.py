@@ -8,6 +8,8 @@ from support_functions import timing
 from sklearn.metrics import silhouette_score
 import numpy as np
 
+from support_functions import regroup_categories, convert_lists
+
 
 @timing(printed_args=['n'])
 def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index',
@@ -62,6 +64,7 @@ def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.ar
 
 
 def filter_categories(df, cat_col='category'):
+    """Filter categories, which are too wide and doesn't in fact mark some real similarity"""
     exclude = ['[Dd]isambiguation',
                ' stubs$',
                ':Living people',
