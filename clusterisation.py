@@ -84,3 +84,29 @@ def filter_categories(df, cat_col='category'):
     for token in exclude:
         df = df[~df[cat_col].str.contains(token)]
     return df
+
+
+def hierarchy_category_matrix(paths, col_names, sparce_maxes, sparce_divides):
+    dfs = [pd.read_csv(paths[0]).reset_index()]
+    dfs[0] = convert_lists(dfs[0], col_names[0])
+    n = len(dfs[0])
+    total_cats_per_article = dfs[0].copy()
+    total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) / sparce_divides[0]
+    total_cats_per_article.drop(col_names[0], axis=True, inplace=True)
+    cats = [filter_categories(regroup_categories(dfs[0], col_names[0], 'index', lists=False), col_names[0])]
+    matrix = make_sparce_category_matrix(cats[0], n, max_val=sparce_maxes[0]).asfptype() / sparce_divides[0]
+
+    for num, (path, col_name, sp_max, sp_divide) in enumerate(zip(paths[1:], col_names[1:], sparce_maxes[1:],
+                                                                  sparce_divides[1:])):
+        df_ = pd.read_csv(path).reset_index()
+        df_ = df_[df_[col_names[num]].isin(set(cats[num][col_names[num]]))]
+
+        total_cats_per_article['cat_count_weighted'] += regroup_categories(
+            df_, 'index', col_name, lists=True).reindex(dfs[0].index)[col_name].apply(len) / sp_divide
+        dfs.append(df_)
+        cats.append(regroup_categories(df_, col_name, 'index', lists=True))
+        cats[num + 1] = filter_categories(cats[num + 1], col_name)
+        matrix += make_sparce_category_matrix(cats[num + 1], n, max_val=sp_max).asfptype() / sp_divide
+
+    matrix = calculate_jakkard(matrix, total_cats_per_article['cat_count_weighted'].values)
+    return dfs[0], matrix
