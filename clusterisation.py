@@ -1,13 +1,12 @@
 import scipy.sparse
 from scipy.sparse import dok_matrix, lil_matrix, spmatrix
 import pandas as pd
-from itertools import permutations
+from itertools import combinations
 from typing import Optional, Callable, Union
 
 from support_functions import timing
 from sklearn.metrics import silhouette_score
 import numpy as np
-
 from support_functions import regroup_categories, convert_lists
 
 
@@ -28,21 +27,18 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
     category_matrix = dok_matrix((n, n), dtype=int)
     df[ids_col] = df[ids_col].apply(sorted).apply(tuple)
     d = {i: 1 for i in df.loc[df.len_ == 2, ids_col].values}
-    category_matrix._update(d)
-    d = {}
     for _, index_list in df.loc[df.len_ > 2, ids_col].items():
-        for i, j in permutations(index_list, 2):
-            if i < j:
-                if max_val is None:
-                    d[(i, j)] = d.get((i, j), 0) + 1
-                else:
-                    cur_val = d.get((i, j), 0)
-                    if cur_val < max_val:
-                        d[(i, j)] = cur_val + 1
+        for i, j in combinations(index_list, 2):
+            if max_val is None:
+                d[(i, j)] = d.get((i, j), 0) + 1
+            else:
+                cur_val = d.get((i, j), 0)
+                if cur_val < max_val:
+                    d[(i, j)] = cur_val + 1
     category_matrix._update(d)
+    category_matrix = category_matrix.tolil()
     category_matrix = (category_matrix + category_matrix.T).tolil()
     category_matrix.setdiag(0)
-    print('Total links after clipping:', category_matrix.todense().sum())
     return category_matrix
 
 
@@ -86,27 +82,37 @@ def filter_categories(df, cat_col='category'):
     return df
 
 
-def hierarchy_category_matrix(paths, col_names, sparce_maxes, sparce_divides):
-    dfs = [pd.read_csv(paths[0]).reset_index()]
+def hierarchy_category_matrix(prefix, paths, col_names, mults) -> tuple[pd.DataFrame, spmatrix]:
+    """
+    Calculate pairwise Jakkard similarities between articles, using weighted approach: different levels of hierarchy
+    have different weights in resulting graph
+    :param prefix: path to folder with files
+    :param paths: paths to specific files with DataFrames with column 'index' (with list of ids) and column with
+    list of categories, each of article from 'index' column belongs to
+    :param col_names: name of column with the list of categories
+    :param mults: weight of each level
+    :return: dataframe with articles and their 1-st-level categories, sparce matrix with Jakkard similarities
+    """
+    dfs = [pd.read_csv(prefix + paths[0]).reset_index()]
     dfs[0] = convert_lists(dfs[0], col_names[0])
     n = len(dfs[0])
     total_cats_per_article = dfs[0].copy()
-    total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) / sparce_divides[0]
+    total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) * mults[0]
     total_cats_per_article.drop(col_names[0], axis=True, inplace=True)
     cats = [filter_categories(regroup_categories(dfs[0], col_names[0], 'index', lists=False), col_names[0])]
-    matrix = make_sparce_category_matrix(cats[0], n, max_val=sparce_maxes[0]).asfptype() / sparce_divides[0]
+    matrix = make_sparce_category_matrix(cats[0], n).asfptype() * mults[0]
 
-    for num, (path, col_name, sp_max, sp_divide) in enumerate(zip(paths[1:], col_names[1:], sparce_maxes[1:],
-                                                                  sparce_divides[1:])):
+    for num, (path, col_name, mult) in enumerate(zip(paths[1:], col_names[1:], mults[1:])):
         df_ = pd.read_csv(path).reset_index()
+        df_ = convert_lists(df_, col_name)
         df_ = df_[df_[col_names[num]].isin(set(cats[num][col_names[num]]))]
 
         total_cats_per_article['cat_count_weighted'] += regroup_categories(
-            df_, 'index', col_name, lists=True).reindex(dfs[0].index)[col_name].apply(len) / sp_divide
+            df_, 'index', col_name, lists=True).reindex(dfs[0].index)[col_name].apply(len) * mult
         dfs.append(df_)
         cats.append(regroup_categories(df_, col_name, 'index', lists=True))
         cats[num + 1] = filter_categories(cats[num + 1], col_name)
-        matrix += make_sparce_category_matrix(cats[num + 1], n, max_val=sp_max).asfptype() / sp_divide
+        matrix += make_sparce_category_matrix(cats[num + 1], n).asfptype() * mult
 
     matrix = calculate_jakkard(matrix, total_cats_per_article['cat_count_weighted'].values)
-    return dfs[0], matrix
+    return dfs[0][['title', 'category']], matrix
