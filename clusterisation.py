@@ -41,7 +41,7 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
     return category_matrix
 
 
-@timing(printed_args=['n'])
+@timing(printed_args=[])
 def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
     """
     Convert matrix of common categories to jakkard similarity matrix. Used weightened Jakkard as here
