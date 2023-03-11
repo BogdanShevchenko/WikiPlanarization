@@ -215,5 +215,10 @@ def get_article_text(title: str, lang: str = 'en', session: Optional[requests.Se
         "titles": title
     }
     data = session.get(url=url, params=params).json()
-    return list(data['query']['pages'].values())[0]['extract']
+    try:
+        return list(data['query']['pages'].values())[0]['extract']
+    except KeyError:
+        print('No extract in', list(data['query']['pages'].values())[0])
+        print('No text for article', title)
+        return ''
 

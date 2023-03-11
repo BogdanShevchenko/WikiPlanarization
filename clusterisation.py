@@ -1,5 +1,5 @@
 import scipy.sparse
-from scipy.sparse import dok_matrix, lil_matrix, spmatrix
+from scipy.sparse import dok_matrix, lil_matrix, spmatrix, csr_matrix
 import pandas as pd
 from itertools import combinations
 from typing import Optional, Callable, Union
@@ -7,7 +7,7 @@ from typing import Optional, Callable, Union
 from support_functions import timing
 from sklearn.metrics import silhouette_score
 import numpy as np
-from support_functions import regroup_categories, convert_lists
+from support_functions import regroup_categories, convert_lists, generate_stages, data_path
 
 
 @timing(printed_args=['n'])
@@ -36,12 +36,12 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
                 if cur_val < max_val:
                     d[(i, j)] = cur_val + 1
     category_matrix._update(d)
-    category_matrix = category_matrix.tolil()
+    category_matrix = category_matrix.tocsc()
     category_matrix = (category_matrix + category_matrix.T).tolil()
-    category_matrix.setdiag(0)
     return category_matrix
 
 
+@timing(printed_args=['n'])
 def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
     """
     Convert matrix of common categories to jakkard similarity matrix. Used weightened Jakkard as here
@@ -56,7 +56,7 @@ def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.ar
     """
     pairwise_sums = np.add.outer(each_node_edges, each_node_edges)
     matrix = matrix / (pairwise_sums - matrix)
-    return matrix
+    return csr_matrix(matrix)
 
 
 def filter_categories(df, cat_col='category'):
@@ -82,18 +82,40 @@ def filter_categories(df, cat_col='category'):
     return df
 
 
-def hierarchy_category_matrix(prefix, paths, col_names, mults) -> tuple[pd.DataFrame, spmatrix]:
+def leveled_jakkard_similarity(
+        project: str, stages_num: Optional[int] = None, paths: Optional[list[str]] = None, col_names=None, mults=None,
+        data_folder_name='data') -> Optional[tuple[pd.DataFrame, spmatrix]]:
     """
     Calculate pairwise Jakkard similarities between articles, using weighted approach: different levels of hierarchy
     have different weights in resulting graph
-    :param prefix: path to folder with files
+    :param project: path to folder with files
+    :param stages_num: number of files
+    :param col_names: name of column with the list of categories if specific files are
+    :param mults: weight of each level, if None - all weights =1
     :param paths: paths to specific files with DataFrames with column 'index' (with list of ids) and column with
     list of categories, each of article from 'index' column belongs to
-    :param col_names: name of column with the list of categories
-    :param mults: weight of each level
+    :param data_folder_name: name of folder with all projects
     :return: dataframe with articles and their 1-st-level categories, sparce matrix with Jakkard similarities
     """
-    dfs = [pd.read_csv(prefix + paths[0]).reset_index()]
+    if paths is None:
+        if stages_num is None:
+            print('You should set or number of stages or specific paths to files with data!')
+            return
+        stages = generate_stages(stages_num - 1)[1:-1]
+        paths = [data_path(stage, project, data_folder_name) for stage in stages]
+        col_names = [stage[1] for stage in stages]
+    else:
+        if stages_num is not None:
+            print('You should set only one parameter - or number of stages or specific paths to files,',
+                  'but both were provided')
+            return
+        if col_names is None:
+            print('You should set col_names if you set specific paths to the files')
+            return
+    if mults is None:
+        mults = [1] * len(paths)
+    print(f'Loading files {", ".join(paths)}')
+    dfs = [pd.read_csv(paths[0]).reset_index()]
     dfs[0] = convert_lists(dfs[0], col_names[0])
     n = len(dfs[0])
     total_cats_per_article = dfs[0].copy()
