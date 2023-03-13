@@ -55,7 +55,7 @@ def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.ar
     :return: matrix with same size as input matrix
     """
     pairwise_sums = np.add.outer(each_node_edges, each_node_edges)
-    matrix = matrix / (pairwise_sums - matrix)
+    matrix = matrix / (pairwise_sums - matrix + 0.0001)
     return csr_matrix(matrix)
 
 
@@ -120,17 +120,18 @@ def leveled_jakkard_similarity(
     n = len(dfs[0])
     total_cats_per_article = dfs[0].copy()
     total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) * mults[0]
-    total_cats_per_article.drop(col_names[0], axis=True, inplace=True)
+    total_cats_per_article.drop(col_names[0], axis=1, inplace=True)
     cats = [filter_categories(regroup_categories(dfs[0], col_names[0], 'index', lists=False), col_names[0])]
     matrix = make_sparce_category_matrix(cats[0], n).asfptype() * mults[0]
 
     for num, (path, col_name, mult) in enumerate(zip(paths[1:], col_names[1:], mults[1:])):
-        df_ = pd.read_csv(path).reset_index()
+        df_ = pd.read_csv(path)
         df_ = convert_lists(df_, col_name)
+        df_ = convert_lists(df_, 'index')
         df_ = df_[df_[col_names[num]].isin(set(cats[num][col_names[num]]))]
-
         total_cats_per_article['cat_count_weighted'] += regroup_categories(
-            df_, 'index', col_name, lists=True).reindex(dfs[0].index)[col_name].apply(len) * mult
+            df_, 'index', col_name, lists=True, add_word=None
+        ).set_index('index')[col_name].apply(len).reindex(dfs[0].index).fillna(0) * mult
         dfs.append(df_)
         cats.append(regroup_categories(df_, col_name, 'index', lists=True))
         cats[num + 1] = filter_categories(cats[num + 1], col_name)

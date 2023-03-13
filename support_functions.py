@@ -3,6 +3,7 @@ from functools import wraps
 from time import time
 import ast
 import pandas as pd
+from typing import Optional
 from collections.abc import Callable, Sequence
 
 
@@ -55,7 +56,7 @@ def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, 
 
 
 def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool = True,
-                       transform_prohibited: bool = False) -> pd.DataFrame:
+                       transform_prohibited: bool = False, add_word: Optional[str] = 'Category:') -> pd.DataFrame:
     """
     Transform DataFrame from result of previous stage to ready for next stage (explode and rearranging lists of
     ids of the articles, belongs to each category).
@@ -68,6 +69,7 @@ def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool 
     :param lists: True if ids are in lists and False if they are integers (at first stage)
     :param transform_prohibited: True if you don't want to try any id_col transformation (i.e. if you have titles
     instead of ids)
+    :param add_word: word to add to category column
     :return: Transformed DataFrame
     """
     if not transform_prohibited:
@@ -81,7 +83,8 @@ def regroup_categories(df: pd.DataFrame, cat_col: str, id_col: str, lists: bool 
     agg_func = {id_col: 'sum'} if lists else {id_col: pd.Series.tolist}
     df = df.explode(cat_col).groupby(cat_col).agg(agg_func).reset_index()
     df[id_col] = df[id_col].apply(set).apply(list)
-    df[cat_col] = 'Category:' + df[cat_col]
+    if add_word is not None:
+        df[cat_col] = add_word + df[cat_col]
     return df
 
 
