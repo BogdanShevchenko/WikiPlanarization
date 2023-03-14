@@ -8,6 +8,12 @@ from support_functions import timing
 from sklearn.metrics import silhouette_score
 import numpy as np
 from support_functions import regroup_categories, convert_lists, generate_stages, data_path
+from sentence_transformers import util
+
+
+def check_clusterisation(jaccard_matrix, cluster_labels):
+    """Check clusterisation quality by Silhouette score, by jaccard distance """
+    return silhouette_score(1 - jaccard_matrix, cluster_labels, metric='precomputed')
 
 
 @timing(printed_args=['n'])
