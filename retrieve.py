@@ -195,22 +195,26 @@ def get_articles_with_infracategories(articles_num, number_of_infracategories, p
         prev_stage = stage
 
 
-def get_article_text(title: str, lang: str = 'en', session: Optional[requests.Session] = None) -> str:
+def get_article_text(title: str, lang: str = 'en', sentences: int = 10,
+                     session: Optional[requests.Session] = None) -> str:
     """
     Retrieve first 10 sentences of article by its name
     :param title: title of article as it is on web-page
     :param lang: wikipedia language code, from https://meta.wikimedia.org/wiki/Table_of_Wikimedia_projects
+    :param sentences: number of sentences to reprieve (up to 10)
     :param session: use requests.Session() for massive retrieving
     :return: text of article (first 10 sentences)
     """
     if session is None:
         session = requests.session()
+    if sentences > 10:
+        sentences = 10
     url = f"https://{lang}.wikipedia.org/w/api.php"
     params = {
         "action": "query",
         "format": "json",
         "prop": "extracts",
-        "exsentences": 10,
+        "exsentences": sentences,
         "explaintext": True,
         "titles": title
     }
