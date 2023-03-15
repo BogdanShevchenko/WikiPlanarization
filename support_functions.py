@@ -173,14 +173,14 @@ def timing(printed_args=None):
             result = f(*args, **kwargs)
             te = time()
             if printed_args is None:
-                pass
+                print(f'function {f.__name__} run by {te - ts:2.4f} sec')
             elif printed_args == 'all':
-                pass
+                print(f'function {f.__name__} with args {args} and kwargs{kwargs} run by {te - ts:2.4f} sec')
             else:
                 args_dict = get_args_dict(f, args, kwargs)
                 args_want_to_see = {i: args_dict[i] for i in args_dict if i in printed_args}
                 print(f'function {f.__name__} with args {args_want_to_see} run by {te - ts:2.4f} sec')
-                return result
+            return result
 
         return wrap
     return decorator

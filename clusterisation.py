@@ -121,13 +121,13 @@ def leveled_jakkard_similarity(
     if mults is None:
         mults = [1] * len(paths)
     print(f'Loading files {", ".join(paths)}')
-    dfs = [pd.read_csv(paths[0]).reset_index()]
-    dfs[0] = convert_lists(dfs[0], col_names[0])
-    n = len(dfs[0])
-    total_cats_per_article = dfs[0].copy()
+    df0 = pd.read_csv(paths[0]).reset_index()
+    df0 = convert_lists(df0, col_names[0])
+    n = len(df0)
+    total_cats_per_article = df0.copy()
     total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) * mults[0]
     total_cats_per_article.drop(col_names[0], axis=1, inplace=True)
-    cats = [filter_categories(regroup_categories(dfs[0], col_names[0], 'index', lists=False), col_names[0])]
+    cats = [filter_categories(regroup_categories(df0, col_names[0], 'index', lists=False), col_names[0])]
     matrix = make_sparce_category_matrix(cats[0], n).asfptype() * mults[0]
 
     for num, (path, col_name, mult) in enumerate(zip(paths[1:], col_names[1:], mults[1:])):
@@ -137,11 +137,15 @@ def leveled_jakkard_similarity(
         df_ = df_[df_[col_names[num]].isin(set(cats[num][col_names[num]]))]
         total_cats_per_article['cat_count_weighted'] += regroup_categories(
             df_, 'index', col_name, lists=True, add_word=None
-        ).set_index('index')[col_name].apply(len).reindex(dfs[0].index).fillna(0) * mult
-        dfs.append(df_)
+        ).set_index('index')[col_name].apply(len).reindex(df0.index).fillna(0) * mult
         cats.append(regroup_categories(df_, col_name, 'index', lists=True))
         cats[num + 1] = filter_categories(cats[num + 1], col_name)
         matrix += make_sparce_category_matrix(cats[num + 1], n).asfptype() * mult
 
     matrix = calculate_jakkard(matrix, total_cats_per_article['cat_count_weighted'].values)
-    return dfs[0][['title', 'category']], matrix
+    df0 = filter_categories(df0.explode(col_names[0]), col_names[0]).groupby('title').agg(
+        {col_names[0]: pd.Series}
+    ).reindex(df0['title'])
+    df0[df0.isna()] = ''
+    df0 = df0.apply(list)
+    return df0.reset_index(), matrix
