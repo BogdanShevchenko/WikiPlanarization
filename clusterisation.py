@@ -69,22 +69,22 @@ def filter_categories(df, cat_col='category'):
     """Filter categories, which are too wide and doesn't in fact mark some real similarity"""
     exclude = ['[Dd]isambiguation',
                ' stubs$',
-               ':Living people',
+               "(?:^|:)Living people",
                '[0-9]+s? (?:births$|deaths)',
-               'Category:Deaths (?:by|due|from)',
+               '(?:^|:)Deaths (?:by|due|from)',
                '(?:Alcohol-related|Accidental|Road incident|Tuberculosis|Sports?) deaths',
                '(?:century|animal|racehorse|BC) (?:births|deaths)',
-               ':Alumni',
+               '(?:^|:)Alumni',
                'alumni$',
                'People educated at',
-               'Category:People from',
+               '(?:^|:)People from',
                "people of .+ descent",
-               ':[0-9]+(?:th|st)-century.+(?:women|people)$',
-               ':Burials at',
-               ':[0-9]+ (?:dis)?establishments in',
+               '(?:^|:)[0-9]+(?:th|st)-century.+(?:women|people)$',
+               '(?:^|:)Burials at',
+               '(?:^|:)[0-9]+ (?:dis)?establishments in',
                'century (?:dis)?establishments', ]
     for token in exclude:
-        df = df[~df[cat_col].str.contains(token)]
+        df = df[~df[cat_col].astype(str).str.contains(token)]
     return df
 
 
@@ -123,6 +123,7 @@ def leveled_jakkard_similarity(
     print(f'Loading files {", ".join(paths)}')
     df0 = pd.read_csv(paths[0]).reset_index()
     df0 = convert_lists(df0, col_names[0])
+    no_disambig_cond = ~df0.set_index('title').category.astype(str).str.contains('isambig')
     n = len(df0)
     total_cats_per_article = df0.copy()
     total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) * mults[0]
@@ -144,8 +145,9 @@ def leveled_jakkard_similarity(
 
     matrix = calculate_jakkard(matrix, total_cats_per_article['cat_count_weighted'].values)
     df0 = filter_categories(df0.explode(col_names[0]), col_names[0]).groupby('title').agg(
-        {col_names[0]: pd.Series}
+        {col_names[0]: pd.Series.tolist}
     ).reindex(df0['title'])
-    df0[df0.isna()] = ''
-    df0 = df0.apply(list)
+    df0.category = df0.category.apply(lambda d: d if isinstance(d, list) else [])
+    df0 = df0.loc[no_disambig_cond]
+    matrix = matrix[no_disambig_cond][:, no_disambig_cond]
     return df0.reset_index(), matrix
