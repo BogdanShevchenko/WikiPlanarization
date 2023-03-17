@@ -12,7 +12,7 @@ from sentence_transformers import util
 
 
 def check_clusterisation(jaccard_matrix, cluster_labels):
-    """Check clusterisation quality by Silhouette score, by jaccard distance """
+    """Check clusterisation quality by Silhouette score, by jaccard distance (which is 1-jaccard similarity)"""
     return silhouette_score(1 - jaccard_matrix, cluster_labels, metric='precomputed')
 
 
@@ -48,11 +48,11 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
 
 
 @timing(printed_args=[])
-def calculate_jakkard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
+def calculate_jaccard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
     """
-    Convert matrix of common categories to jakkard similarity matrix. Used weightened Jakkard as here
+    Convert matrix of common categories to jaccard similarity matrix. Used weightened Jaccard as here
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.jaccard.html
-    Also, gor Jakkard generalization read
+    Also, gor Jaccard generalization read
     http://theory.stanford.edu/~sergei/papers/soda10-jaccard.pdf
 
     :param matrix: affinity matrix (A(i,j) = # of similar categories
@@ -88,11 +88,11 @@ def filter_categories(df, cat_col='category'):
     return df
 
 
-def leveled_jakkard_similarity(
+def leveled_jaccard_similarity(
         project: str, stages_num: Optional[int] = None, paths: Optional[list[str]] = None, col_names=None, mults=None,
         data_folder_name='data') -> Optional[tuple[pd.DataFrame, spmatrix]]:
     """
-    Calculate pairwise Jakkard similarities between articles, using weighted approach: different levels of hierarchy
+    Calculate pairwise Jaccard similarities between articles, using weighted approach: different levels of hierarchy
     have different weights in resulting graph
     :param project: path to folder with files
     :param stages_num: number of files
@@ -101,7 +101,7 @@ def leveled_jakkard_similarity(
     :param paths: paths to specific files with DataFrames with column 'index' (with list of ids) and column with
     list of categories, each of article from 'index' column belongs to
     :param data_folder_name: name of folder with all projects
-    :return: dataframe with articles and their 1-st-level categories, sparce matrix with Jakkard similarities
+    :return: dataframe with articles and their 1-st-level categories, sparce matrix with Jaccard similarities
     """
     if paths is None:
         if stages_num is None:
@@ -143,7 +143,7 @@ def leveled_jakkard_similarity(
         cats[num + 1] = filter_categories(cats[num + 1], col_name)
         matrix += make_sparce_category_matrix(cats[num + 1], n).asfptype() * mult
 
-    matrix = calculate_jakkard(matrix, total_cats_per_article['cat_count_weighted'].values)
+    matrix = calculate_jaccard(matrix, total_cats_per_article['cat_count_weighted'].values)
     df0 = filter_categories(df0.explode(col_names[0]), col_names[0]).groupby('title').agg(
         {col_names[0]: pd.Series.tolist}
     ).reindex(df0['title'])
