@@ -13,7 +13,9 @@ from sentence_transformers import util
 
 def check_clusterisation(jaccard_matrix, cluster_labels):
     """Check clusterisation quality by Silhouette score, by jaccard distance (which is 1-jaccard similarity)"""
-    return silhouette_score(1 - jaccard_matrix, cluster_labels, metric='precomputed')
+    jaccard_dist = 1 - jaccard_matrix.todense().A
+    np.fill_diagonal(jaccard_dist, 0)
+    return silhouette_score(jaccard_dist, cluster_labels, metric='precomputed')
 
 
 @timing(printed_args=['n'])
