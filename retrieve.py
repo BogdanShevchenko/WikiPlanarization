@@ -88,8 +88,8 @@ def get_category_mass(titles: list[str], lang: str = 'en', session: Optional[req
 
     if len(titles) > n:
         res = {}
-        [res.update(d) for d in [get_category_mass(titles[t: t + n], lang, session, n)
-                                 for t in range(0, len(titles), n)]]
+        for d in [get_category_mass(titles[t: t + n], lang, session, n) for t in range(0, len(titles), n)]:
+            res.update(d)
         return res
 
     data = session.get(url=url, params=params).json()

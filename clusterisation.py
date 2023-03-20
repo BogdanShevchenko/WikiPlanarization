@@ -2,7 +2,7 @@ import scipy.sparse
 from scipy.sparse import dok_matrix, lil_matrix, spmatrix, csr_matrix
 import pandas as pd
 from itertools import combinations
-from typing import Optional, Callable, Union
+from typing import Optional, Callable, Union, Sequence
 
 from support_functions import timing
 from sklearn.metrics import silhouette_score
@@ -11,10 +11,15 @@ from support_functions import regroup_categories, convert_lists, generate_stages
 from sentence_transformers import util
 
 
-def check_clusterisation(jaccard_matrix, cluster_labels):
+def affinity_to_dist(affinity_matrix: spmatrix) -> np.matrix:
+    """Change Jaccard similarity matrix to Jaccard distance matrix"""
+    dist_matrix = 1 - affinity_matrix.todense().A
+    np.fill_diagonal(dist_matrix, 0)
+    return dist_matrix
+
+
+def check_clusterisation(jaccard_dist: np.matrix, cluster_labels: Sequence) -> float:
     """Check clusterisation quality by Silhouette score, by jaccard distance (which is 1-jaccard similarity)"""
-    jaccard_dist = 1 - jaccard_matrix.todense().A
-    np.fill_diagonal(jaccard_dist, 0)
     return silhouette_score(jaccard_dist, cluster_labels, metric='precomputed')
 
 

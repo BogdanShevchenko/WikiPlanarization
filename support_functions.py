@@ -43,7 +43,8 @@ def apply_with_interim_saving(df: pd.DataFrame, f: Callable, col_to_apply: str, 
                     lambda x: f(x, **kwargs))
             else:
                 args_list = df.loc[pos:pos + n, col_to_apply].tolist()
-                df.loc[pos:pos + n, new_col] = pd.Series(f(args_list, **kwargs)).reindex(args_list).tolist()
+                df.loc[pos:pos + n, new_col] = pd.Series(f(args_list, **kwargs)).reindex(args_list).set_axis(
+                    df.loc[pos:pos + n].index)
             df.to_csv(csv_name, index=False)
             if verbose:
                 print(pos, datetime.now())
