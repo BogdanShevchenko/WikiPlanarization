@@ -106,6 +106,7 @@ def get_category_mass(titles: list[str], lang: str = 'en', session: Optional[req
         print(titles, 'no categories')
         categories = {}
     categories.update(second_batch)
+    categories.update({i: [] for i in titles if i not in categories})
     return categories
 
 

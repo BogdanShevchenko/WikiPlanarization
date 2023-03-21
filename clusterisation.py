@@ -7,7 +7,7 @@ from typing import Optional, Callable, Union, Sequence
 from support_functions import timing
 from sklearn.metrics import silhouette_score
 import numpy as np
-from support_functions import regroup_categories, convert_lists, generate_stages, data_path
+from support_functions import regroup_categories, convert_lists, generate_stages, data_path, fillna_list
 from sentence_transformers import util
 
 
@@ -154,7 +154,7 @@ def leveled_jaccard_similarity(
     df0 = filter_categories(df0.explode(col_names[0]), col_names[0]).groupby('title').agg(
         {col_names[0]: pd.Series.tolist}
     ).reindex(df0['title'])
-    df0.category = df0.category.apply(lambda d: d if isinstance(d, list) else [])
+    df0[col_names[0]] = fillna_list(df0[col_names[0]], [])
     df0 = df0.loc[no_disambig_cond]
     matrix = matrix[no_disambig_cond][:, no_disambig_cond]
     return df0.reset_index(), matrix

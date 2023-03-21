@@ -1,9 +1,10 @@
+import typing
 from datetime import datetime
 from functools import wraps
 from time import time
 import ast
 import pandas as pd
-from typing import Optional
+from typing import Optional, Union
 from collections.abc import Callable, Sequence
 
 
@@ -185,3 +186,11 @@ def timing(printed_args=None):
 
         return wrap
     return decorator
+
+
+def fillna_list(x: pd.Series, value: typing.Any):
+    """Pandas fillna cannot fill Nones with list or dict, this function can"""
+    if isinstance(value, Union[list, dict]):
+        return x.apply(lambda d: d if isinstance(d, Union[list, dict]) else value)
+    else:
+        return x.fillna(value)
