@@ -36,7 +36,7 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
     :return: sparce matrix n X n where value in cell (i, j) is amount of common categories of article i and article j
     """
     df['len_'] = df[ids_col].apply(len)
-    print('Added', df.eval('len_* (len_ - 1) / 2').sum(), 'new edges')
+    print(f'Adding {df.eval("len_ * (len_ - 1) / 2").sum()} new edges')
     category_matrix = dok_matrix((n, n), dtype=int)
     df[ids_col] = df[ids_col].apply(sorted).apply(tuple)
     d = {i: 1 for i in df.loc[df.len_ == 2, ids_col].values}
@@ -55,7 +55,7 @@ def make_sparce_category_matrix(df: pd.DataFrame, n: int, ids_col: str = 'index'
 
 
 @timing(printed_args=[])
-def calculate_jaccard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array) -> spmatrix:
+def calculate_jaccard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.array, parts: int=5000) -> spmatrix:
     """
     Convert matrix of common categories to jaccard similarity matrix. Used weightened Jaccard as here
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.jaccard.html
@@ -64,7 +64,6 @@ def calculate_jaccard(matrix: Union[spmatrix, np.matrix], each_node_edges: np.ar
 
     :param matrix: affinity matrix (A(i,j) = # of similar categories
     :param each_node_edges: number of categories for each of articles (weighted with same weights as matrix)
-
     :return: matrix with same size as input matrix
     """
     pairwise_sums = np.add.outer(each_node_edges, each_node_edges)
@@ -89,14 +88,37 @@ def filter_categories(df, cat_col='category'):
                '(?:^|:)[0-9]+(?:th|st)-century.+(?:women|people)$',
                '(?:^|:)Burials at',
                '(?:^|:)[0-9]+ (?:dis)?establishments in',
-               'century (?:dis)?establishments', ]
+               'century (?:dis)?establishments',
+               '(?:^|:)Years',
+               'by time',
+               'Main topic classifications',
+               '(?:^|:)Humans$',
+               'by decade',
+               'Individual apes',
+               ' beginnings$',
+               'by time',
+               'by country',
+               'by type and year$',
+               'by nationality',
+               'by year',
+               'Categories by',
+               'by continent',
+               'Works by',
+               '(?:^|:)[0-9][0-9][0-9][0-9]s?$',
+               'by century',
+               'by occupation',
+               'Populated places by',
+               '(?:p|P)eople by university',
+               'by religion'
+               ]
     for token in exclude:
         df = df[~df[cat_col].astype(str).str.contains(token)]
     return df
 
 
 def leveled_jaccard_similarity(
-        project: str, stages_num: Optional[int] = None, paths: Optional[list[str]] = None, col_names=None, mults=None,
+        project: str, stages_num: Optional[int] = None, paths: Optional[list[str]] = None,
+        col_names: Optional[list[str]] = None, mults: Optional[list[int]] = None,
         data_folder_name='data') -> Optional[tuple[pd.DataFrame, spmatrix]]:
     """
     Calculate pairwise Jaccard similarities between articles, using weighted approach: different levels of hierarchy
@@ -126,7 +148,17 @@ def leveled_jaccard_similarity(
             print('You should set col_names if you set specific paths to the files')
             return
     if mults is None:
-        mults = [1] * len(paths)
+        mults = np.ones(len(paths))
+    else:
+        #  multiply multipliers by some coefficient, so that they will be close to ints. It will not change results
+        #  because we use Jaccard measure (it is not changing if all weights are increased simultaneously)
+        #  this is done for memory optimisation
+        mults = np.array(mults)
+        mults = mults / mults[mults != 0].min()
+        while np.abs((np.rint(mults) - mults)[mults != 0] / mults[mults != 0]).max() > 0.01:
+            mults = mults * 10
+        mults = np.rint(mults).astype(int)
+
     print(f'Loading files {", ".join(paths)}')
     df0 = pd.read_csv(paths[0]).reset_index()
     df0 = convert_lists(df0, col_names[0])
@@ -135,22 +167,23 @@ def leveled_jaccard_similarity(
     total_cats_per_article = df0.copy()
     total_cats_per_article['cat_count_weighted'] = total_cats_per_article[col_names[0]].apply(len) * mults[0]
     total_cats_per_article.drop(col_names[0], axis=1, inplace=True)
-    cats = [filter_categories(regroup_categories(df0, col_names[0], 'index', lists=False), col_names[0])]
-    matrix = make_sparce_category_matrix(cats[0], n).asfptype() * mults[0]
+    cats = filter_categories(regroup_categories(df0, col_names[0], 'index', lists=False), col_names[0])
+    matrix = make_sparce_category_matrix(cats, n) * mults[0]
 
     for num, (path, col_name, mult) in enumerate(zip(paths[1:], col_names[1:], mults[1:])):
         df_ = pd.read_csv(path)
         df_ = convert_lists(df_, col_name)
         df_ = convert_lists(df_, 'index')
-        df_ = df_[df_[col_names[num]].isin(set(cats[num][col_names[num]]))]
+        df_ = df_[df_[col_names[num]].isin(set(cats[col_names[num]]))]
         total_cats_per_article['cat_count_weighted'] += regroup_categories(
             df_, 'index', col_name, lists=True, add_word=None
         ).set_index('index')[col_name].apply(len).reindex(df0.index).fillna(0) * mult
-        cats.append(regroup_categories(df_, col_name, 'index', lists=True))
-        cats[num + 1] = filter_categories(cats[num + 1], col_name)
-        matrix += make_sparce_category_matrix(cats[num + 1], n).asfptype() * mult
+        cats = regroup_categories(df_, col_name, 'index', lists=True)
+        cats = filter_categories(cats, col_name)
+        matrix += make_sparce_category_matrix(cats, n) * mult
 
-    matrix = calculate_jaccard(matrix, total_cats_per_article['cat_count_weighted'].values)
+    matrix = matrix.astype(np.float32)
+    matrix = calculate_jaccard(matrix, total_cats_per_article['cat_count_weighted'].values.astype(np.float32))
     df0 = filter_categories(df0.explode(col_names[0]), col_names[0]).groupby('title').agg(
         {col_names[0]: pd.Series.tolist}
     ).reindex(df0['title'])
